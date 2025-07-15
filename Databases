@@ -1,1 +1,34 @@
+# Installation and download database
 
+The main advantage of MetaPatho is that it combines high accuracy with simplicity, speed, and user-friendliness. 
+
+MetaPatho does not require the installation of complex software or environments and operates in just two steps: 
+
+
+Step 1: download the bacterial pathogen genome database; 
+
+Before running MetaPatho, users must download the database they need (i.e., MetaPatho-HBPDB or MetaPatho-PBPDB):
+
+The human (MetaPatho-HBPDB) and plant (MetaPatho-PBPDB) bacterial pathogen databases have been deposited at the Figshare (https://figshare.com/s/753d3906f6faf1986d6a)
+
+
+
+
+Step 2: install DIAMOND in the computing environment, as MetaPatho relies on DIAMOND for database alignment.
+
+```bash
+conda create -n MetaPatho
+source activate MetaPatho
+conda install diamond=2.1.8
+```
+
+
+About the DIAMOND:
+
+DIAMOND is a  high-throughput program for aligning DNA reads or protein sequences against a protein reference database such as NR, at up to 20,000 times the speed of BLAST, with high sensitivity.
+
+See the DIAMOND github page: https://github.com/bbuchfink/diamond
+
+Cite the DIAMOND:
+
+Buchfink B, Reuter K, Drost HG, "Sensitive protein alignments at tree-of-life scale using DIAMOND", Nature Methods 18, 366–368 (2021). doi:10.1038/s41592-021-01101-x
