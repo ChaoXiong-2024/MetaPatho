@@ -7,21 +7,21 @@ MetaPatho does not require the installation of complex software or environments 
 
 Step 1: download the bacterial pathogen genome database; 
 
-Before running MetaPatho, users must download the database they need (i.e., MetaPatho-HBPDB or MetaPatho-PBPDB):
+Before running MetaPatho, users must download the database they need:
+
+MetaPatho-HBPDB: MetaPatho-HBPDB.v1.0.dmnd.7z and MetaPatho-HBPDB.v1.0.anno
+
+MetaPatho-PBPDB: MetaPatho-PBPDB.v1.0.dmnd.7z and MetaPatho-PBPDB.v1.0.anno
 
 The human (MetaPatho-HBPDB) and plant (MetaPatho-PBPDB) bacterial pathogen databases have been deposited at the Figshare (https://figshare.com/s/753d3906f6faf1986d6a)
 
 
 
-
 Step 2: install DIAMOND in the computing environment, as MetaPatho relies on DIAMOND for database alignment.
 
-```bash
 conda create -n MetaPatho
 source activate MetaPatho
 conda install diamond=2.1.8
-```
-
 
 About the DIAMOND:
 
