@@ -1,0 +1,229 @@
+#!/bin/bash
+
+# In-silico tests of the pathogen identification pipeline
+
+# Before running MetaPatho, users must download the databases and MOCK communities:
+
+# Human pathogens
+# MetaPatho-HBPDB database 
+# 1 MetaPatho-HBPDB.v1.0.dmnd 
+# 2 MetaPatho-HBPDB.v1.0.anno
+# 3 MOCK_Human_pathogens.fa
+
+# Plant pathogens
+# MetaPatho-PBPDB database
+# 1 MetaPatho-PBPDB.v1.0.dmnd 
+# 2 MetaPatho-PBPDB.v1.0.anno
+# 3 MOCK_Plant_pathogens.fa
+
+# All these databases and MOCK communities have been deposited at the Figshare (https://figshare.com/s/753d3906f6faf1986d6a)
+
+
+
+# Section 1 Human pathogens 
+
+# MetaPatho-HBPDB database 
+# 1 MetaPatho-HBPDB.v1.0.dmnd
+# 2 MetaPatho-HBPDB.v1.0.anno
+# 3 MOCK_Human_pathogens.fa
+
+
+# --------------------------
+# Activate conda environment with DIAMOND
+# --------------------------
+
+source activate MetaPatho
+
+# --------------------------
+# DIAMOND blastp search against MetaPatho database
+# --------------------------
+
+  diamond blastp --db Database/MetaPatho-HBPDB.v1.0 --query MOCK_Human_pathogens.fa \
+  --outfmt 6 --threads 22 --max-target-seqs 1 --quiet -e 1e-10 --more-sensitive --block-size 10 \
+  --query-cover 70 --out HBPDB_Results/HBPDB_diamond.f6
+
+# --------------------------
+# Select relevant columns (1-4 and 12), remove empty lines
+# --------------------------
+
+cut -f 1-4,12 HBPDB_Results/HBPDB_diamond.f6 | cut -f 1 -d ',' | grep -v -P '\t$' > HBPDB_Results/HBPDB_1.list
+
+# --------------------------
+# Filter hits by identity ($3, 70-99), alignment length ($4, >=100), and bitscore ($5, >=100 or >=200)
+# --------------------------
+# Considering the high diversity and variability of soil microbiomes in real-world, large-scale surveys, adopting a moderate ID threshold (i.e., 80-90%) 
+# could enable a more comprehensive and accurate characterization of bacterial pathogen distributions in soil
+
+
+# ID70 (identity >= 70%)
+awk 'BEGIN{FS=OFS="\t"} $3>=70 && $4>=100 && $5>=200' HBPDB_Results/HBPDB_1.list > HBPDB_Results/HBPDB_2.list
+
+# ID80 (identity >= 80%)
+awk 'BEGIN{FS=OFS="\t"} $3>=80 && $4>=100 && $5>=200' HBPDB_Results/HBPDB_1.list > HBPDB_Results/HBPDB_2.list
+
+# ID90 (identity >= 90%)
+awk 'BEGIN{FS=OFS="\t"} $3>=90 && $4>=100 && $5>=200' HBPDB_Results/HBPDB_1.list > HBPDB_Results/HBPDB_2.list
+
+# ID99 (identity >= 99%)
+awk 'BEGIN{FS=OFS="\t"} $3>=99 && $4>=100 && $5>=200' HBPDB_Results/HBPDB_1.list > HBPDB_Results/HBPDB_2.list
+
+
+# --------------------------
+# Prepare annotation table header
+# --------------------------
+
+cut -f 1-2 HBPDB_Results/HBPDB_2.list | sed '1 i Pathogen_Name\tBlast_Name' > HBPDB_Results/HBPDB_3.list
+
+# Swap columns for matching (Pathogen_Name <-> Blast_Name)
+
+awk 'BEGIN{FS=OFS="\t"} {temp = $1; $1 = $2; $2 = temp; print}' HBPDB_Results/HBPDB_3.list > HBPDB_Results/HBPDB_4.list
+
+
+# Merge with annotation database (MetaPatho-HBPDB.v1.0.anno)
+
+awk 'BEGIN{FS=OFS="\t"} NR==FNR{a[$1]=$2"\t"$3"\t"$4} NR>FNR{print a[$1],$0}' Database/MetaPatho-HBPDB.v1.0.anno \
+HBPDB_Results/HBPDB_4.list | sed 's/^\t/Unannotated\t/' > HBPDB_Results/HBPDB.Results
+
+
+
+# --------------------------
+# Check sequence stats using seqkit
+# --------------------------
+seqkit stats MOCK_Human_pathogens.fa  # Check overall statistics (e.g., total number of sequences, 139893) 
+
+# Count how many sequences match different length tags in the FASTA header
+grep -c '>.*200bp' MOCK_Human_pathogens.fa  # 99893 sequences labeled with 200bp
+grep -c '>.*400bp' MOCK_Human_pathogens.fa  # 25000 sequences labeled with 400bp
+grep -c '>.*600bp' MOCK_Human_pathogens.fa  # 10000 sequences labeled with 600bp
+grep -c '>.*1000bp' MOCK_Human_pathogens.fa # 5000 sequences labeled with 1000bp
+
+# Count protein sequences labeled as NonP (10 non-pathogenic bacteria (serving as true negatives))
+
+grep -c '>.*NonP' MOCK_Human_pathogens.fa            # 28000 sequences labeled NonP (serving as true negatives)
+
+# Comments on NonP approximate counts per length
+# NonP 200bp:   20000
+# NonP 400bp:    5000
+# NonP 600bp:    2000
+# NonP 1000bp:   1000
+
+
+
+# Calculation of accuracy, specificity, and sensitivity 
+
+# Accuracy (ACC) measures the overall correctness of the pipeline; 
+# Specificity (SP) measures the proportion of actual negatives that are correctly identified; 
+# Sensitivity (SE) measures the proportion of actual positives that are correctly identified; 
+# Positive predictive value (PPV) measures the proportion of positive identifications that are actually correct; 
+# Negative predictive value (NPV) measures the proportion of negative identifications that are actually correct.
+
+# ACC = (TP+TN) / (TP+TN+FP+FN); SP = TN / (TN+FP); SE = TP / (TP+FN); PPV = TP / (TP+FP); NPV = TN / (TN+FN).
+# TP, true positive number; TN, true negative number; FP, false positive number; FN, false negative number.
+
+
+
+
+
+
+
+
+
+
+
+
+# Section 2 Plant pathogens
+
+# MetaPatho-PBPDB database
+# 1 MetaPatho-PBPDB.v1.0.dmnd 
+# 2 MetaPatho-PBPDB.v1.0.anno
+# 3 MOCK_Plant_pathogens.fa
+
+
+# --------------------------
+# Activate conda environment with DIAMOND
+# --------------------------
+
+source activate MetaPatho
+
+# --------------------------
+# DIAMOND blastp search against MetaPatho database
+# --------------------------
+
+  diamond blastp --db Database/MetaPatho-PBPDB.v1.0 --query MOCK_Plant_pathogens.fa \
+  --outfmt 6 --threads 22 --max-target-seqs 1 --quiet -e 1e-10 --more-sensitive --block-size 10 \
+  --query-cover 70 --out PBPDB_Results/PBPDB_diamond.f6
+
+# --------------------------
+# Select relevant columns (1-4 and 12), remove empty lines
+# --------------------------
+cut -f 1-4,12 PBPDB_Results/PBPDB_diamond.f6 | cut -f 1 -d ',' | grep -v -P '\t$' > PBPDB_Results/PBPDB_1.list
+
+# --------------------------
+# Filter hits by identity ($3, 70-99), alignment length ($4, >=100), and bitscore ($5, >=100 or >=200)
+# --------------------------
+# Considering the high diversity and variability of soil microbiomes in real-world, large-scale surveys, adopting a moderate ID threshold (i.e., 80-90%) 
+# could enable a more comprehensive and accurate characterization of bacterial pathogen distributions in soil
+
+
+# ID70 (identity >= 70%)
+awk 'BEGIN{FS=OFS="\t"} $3>=70 && $4>=100 && $5>=200' PBPDB_Results/PBPDB_1.list > PBPDB_Results/PBPDB_2.list
+
+# ID80 (identity >= 80%)
+awk 'BEGIN{FS=OFS="\t"} $3>=80 && $4>=100 && $5>=200' PBPDB_Results/PBPDB_1.list > PBPDB_Results/PBPDB_2.list
+
+# ID90 (identity >= 90%)
+awk 'BEGIN{FS=OFS="\t"} $3>=90 && $4>=100 && $5>=200' PBPDB_Results/PBPDB_1.list > PBPDB_Results/PBPDB_2.list
+
+# ID99 (identity >= 99%)
+awk 'BEGIN{FS=OFS="\t"} $3>=99 && $4>=100 && $5>=200' PBPDB_Results/PBPDB_1.list > PBPDB_Results/PBPDB_2.list
+
+# --------------------------
+# Prepare annotation table header
+# --------------------------
+
+cut -f 1-2 PBPDB_Results/PBPDB_2.list | sed '1 i Pathogen_Name\tBlast_Name' > PBPDB_Results/PBPDB_3.list
+
+# Swap columns for matching (Pathogen_Name <-> Blast_Name)
+awk 'BEGIN{FS=OFS="\t"} {temp = $1; $1 = $2; $2 = temp; print}' PBPDB_Results/PBPDB_3.list > PBPDB_Results/PBPDB_4.list
+
+
+# Merge with annotation database (MetaPatho-PBPDB.v1.0.anno)
+awk 'BEGIN{FS=OFS="\t"} NR==FNR{a[$1]=$2"\t"$3"\t"$4} NR>FNR{print a[$1],$0}' Database/MetaPatho-PBPDB.v1.0.anno \
+PBPDB_Results/PBPDB_4.list | sed 's/^\t/Unannotated\t/' > PBPDB_Results/PBPDB.Results
+
+
+
+# --------------------------
+# Check sequence stats using seqkit
+# --------------------------
+seqkit stats MOCK_Plant_pathogens.fa  # Check overall statistics (e.g., total number of sequences, 139917) 
+
+# Count how many sequences match different length tags in the FASTA header
+grep -c '>.*200bp' MOCK_Plant_pathogens.fa  # 99930 sequences labeled with 200bp
+grep -c '>.*400bp' MOCK_Plant_pathogens.fa  # 24991 sequences labeled with 400bp
+grep -c '>.*600bp' MOCK_Plant_pathogens.fa  # 10000 sequences labeled with 600bp
+grep -c '>.*1000bp' MOCK_Plant_pathogens.fa # 4996 sequences labeled with 1000bp
+
+# Count protein sequences labeled as NonP (10 non-pathogenic bacteria (serving as true negatives))
+
+grep -c '>.*NonP' MOCK_Plant_pathogens.fa            # 28000 sequences labeled NonP (serving as true negatives)
+
+# Comments on NonP approximate counts per length
+# NonP 200bp:   20000
+# NonP 400bp:    5000
+# NonP 600bp:    2000
+# NonP 1000bp:   1000
+
+
+
+
+# Calculation of accuracy, specificity, and sensitivity 
+
+# Accuracy (ACC) measures the overall correctness of the pipeline; 
+# Specificity (SP) measures the proportion of actual negatives that are correctly identified; 
+# Sensitivity (SE) measures the proportion of actual positives that are correctly identified; 
+# Positive predictive value (PPV) measures the proportion of positive identifications that are actually correct; 
+# Negative predictive value (NPV) measures the proportion of negative identifications that are actually correct.
+
+# ACC = (TP+TN) / (TP+TN+FP+FN); SP = TN / (TN+FP); SE = TP / (TP+FN); PPV = TP / (TP+FP); NPV = TN / (TN+FN).
+# TP, true positive number; TN, true negative number; FP, false positive number; FN, false negative number.
